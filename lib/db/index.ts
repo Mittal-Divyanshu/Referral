@@ -4,7 +4,7 @@ export {
   ReferralStatus,
   RewardStatus,
   ReferralEventType,
-} from "@/lib/generated/prisma";
+} from "./enums";
 export type {
   User,
   Referral,

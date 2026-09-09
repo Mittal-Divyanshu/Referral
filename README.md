@@ -6,9 +6,8 @@ A referral management platform. Members get a unique referral link, share it, an
 earn a ₹500 reward when someone they referred signs up and completes their
 profile. Admins review and pay out those rewards.
 
-> Status: **Phase 1 complete** — project skeleton, tooling and configuration. The
-> database, authentication and referral engine land in later phases. See
-> [Roadmap](#roadmap).
+> Status: **Working demo complete** — the full referral flow runs end to end
+> against a local PostgreSQL instance. See [Roadmap](#roadmap).
 
 ---
 
@@ -103,14 +102,35 @@ npm install-scripts approve prisma @prisma/engines esbuild unrs-resolver
 
 ## PostgreSQL setup
 
-Create the database (adjust the user to match your install):
+This demo runs against a **self-contained PostgreSQL 18 instance on port 5433**
+that lives in `./.pgdata` (git-ignored). It was created with the bundled
+`initdb` so it needs no cluster password and never touches your main Postgres on 5432. It is still real PostgreSQL.
+
+Everyday use — just start it:
 
 ```bash
-createdb referflow
+npm run db:start    # start the instance on port 5433
+npm run db:status   # check it is running
+npm run db:stop     # stop it
 ```
 
-On Windows, `psql` and `createdb` are usually not on `PATH`. They live in the
-PostgreSQL `bin` directory, for example `C:\Program Files\PostgreSQL\18\bin`.
+If `.pgdata` does not exist yet (fresh clone), create it once. On Windows, the
+PostgreSQL binaries live in `C:\Program Files\PostgreSQL\18\bin`:
+
+```bash
+# 1. create the data directory with a dedicated superuser
+"C:\Program Files\PostgreSQL\18\bin\initdb.exe" -D .pgdata -U referflow \
+  --auth-local=trust --auth-host=scram-sha-256 --pwfile=<(echo referflow_dev) -E UTF8
+# 2. start it, then create the database
+npm run db:start
+node -e "const{Client}=require('pg');(async()=>{const c=new Client({host:'localhost',port:5433,user:'referflow',password:'referflow_dev',database:'postgres'});await c.connect();await c.query('CREATE DATABASE referflow');await c.end();})()"
+```
+
+### Using your own Postgres instead
+
+Point `DATABASE_URL` in `.env` at any PostgreSQL database and run
+`npm run db:migrate && npm run db:seed`. The `.env` file keeps the original 5432
+line commented for reference.
 
 ## Environment variables
 
@@ -181,20 +201,33 @@ npx playwright install chromium
 
 ## Demo accounts
 
-> Available from Phase 2, once seeding is implemented.
+Created by `npm run db:seed`. The password is a **development-only placeholder**
+— never use it anywhere real.
+
+| Role     | Email                   | Password      | Notes                               |
+| -------- | ----------------------- | ------------- | ----------------------------------- |
+| Admin    | `admin@example.com`     | `Password123` | Sees the admin dashboard            |
+| Referrer | `divyanshu@example.com` | `Password123` | Referral code `DVX82K9`             |
+| User     | `rahul@example.com`     | `Password123` | Referred, QUALIFIED, reward PENDING |
+| User     | `amit@example.com`      | `Password123` | Referred, only REGISTERED           |
+| User     | `neha@example.com`      | `Password123` | Referred, COMPLETED, reward PAID    |
+
+Try the referral flow yourself: open
+`http://localhost:3000/r/DVX82K9`, register a new account, complete your profile,
+then log in as the admin to approve and pay the reward.
 
 ## Roadmap
 
 | Phase | Scope                                                        | Status  |
 | ----- | ------------------------------------------------------------ | ------- |
 | 1     | Project setup, tooling, environment config                   | ✅ done |
-| 2     | Prisma schema, migrations, seed data                         | next    |
-| 3     | Registration, login, logout, sessions, authorization         | —       |
-| 4     | Referral codes, `/r/[code]`, click tracking, attribution     | —       |
-| 5     | Profile completion, qualification, reward lifecycle          | —       |
-| 6     | Dashboard, referrals page, profile page, sharing             | —       |
-| 7     | Admin dashboard, referral and reward management              | —       |
-| 8     | Unit tests, E2E tests, security review, database constraints | —       |
+| 2     | Prisma schema, migrations, seed data                         | ✅ done |
+| 3     | Registration, login, logout, sessions, authorization         | ✅ done |
+| 4     | Referral codes, `/r/[code]`, click tracking, attribution     | ✅ done |
+| 5     | Profile completion, qualification, reward lifecycle          | ✅ done |
+| 6     | Dashboard, referrals page, profile page, sharing             | ✅ done |
+| 7     | Admin dashboard, referral and reward management              | ✅ done |
+| 8     | Unit tests, E2E tests, security review, database constraints | partial |
 | 9     | Responsive polish, error handling, documentation             | —       |
 
 ## Security considerations

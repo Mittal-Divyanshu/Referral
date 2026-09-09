@@ -1,4 +1,4 @@
-import { ReferralStatus, RewardStatus } from "@/lib/db";
+import { ReferralStatus, RewardStatus } from "@/lib/db/enums";
 
 /**
  * Status badges. Colour-coded, but the text always carries the meaning too --

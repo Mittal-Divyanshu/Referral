@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { RewardStatus } from "@/lib/db";
+import { RewardStatus } from "@/lib/db/enums";
 
 /**
  * Approve / reject / mark-paid buttons for a single reward. Which buttons show
