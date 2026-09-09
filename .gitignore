@@ -42,3 +42,4 @@ next-env.d.ts
 
 # Keep the committed template, ignore real env files
 !.env.example
+/lib/generated/

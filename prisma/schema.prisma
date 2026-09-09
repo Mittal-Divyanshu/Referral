@@ -1,0 +1,163 @@
+// ReferFlow database schema.
+//
+// Design notes live in docs/architecture.md. In short:
+//   - User          accounts, each with a unique unguessable referral code
+//   - ReferralClick  anonymous click log, powers attribution
+//   - Referral       the referrer -> referred relationship and its lifecycle
+//   - Reward         one ₹500 payout per qualified referral (unique constraint)
+//   - ReferralEvent  append-only audit trail of everything that happened
+//
+// Enums are native Postgres enums. Money is stored in integer paise-free
+// whole rupees for V1 (amount is in whole INR), avoiding float rounding.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ReferralStatus {
+  CLICKED
+  REGISTERED
+  QUALIFIED
+  COMPLETED
+  REJECTED
+}
+
+enum RewardStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum ReferralEventType {
+  REFERRAL_CLICKED
+  USER_REGISTERED
+  REFERRAL_QUALIFIED
+  REFERRAL_COMPLETED
+  REFERRAL_REJECTED
+  REWARD_CREATED
+  REWARD_APPROVED
+  REWARD_REJECTED
+  REWARD_PAID
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(USER)
+  referralCode String   @unique
+
+  // Profile fields. The qualifying action is "complete your profile", which
+  // means providing a phone number (name is required at registration).
+  phone          String?
+  profileComplete Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Referrals where this user is the one doing the referring.
+  referralsMade     Referral[] @relation("Referrer")
+  // The single referral where this user is the one who was referred. A user
+  // can only ever be referred once, enforced by @unique on referredUserId.
+  referralReceived  Referral?  @relation("ReferredUser")
+
+  rewards Reward[]
+  clicks  ReferralClick[] @relation("ClickReferrer")
+
+  @@index([role])
+}
+
+model ReferralClick {
+  id           String @id @default(cuid())
+  referralCode String
+  referrerId   String
+
+  // Opaque random id stored in the visitor's attribution cookie. We look the
+  // referrer up from this server-side, so the client can never forge who gets
+  // credited. Deliberately NOT the referral code.
+  sessionId   String
+  landingPage String
+  userAgent   String?
+
+  createdAt DateTime @default(now())
+
+  referrer User @relation("ClickReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+
+  @@index([referralCode])
+  @@index([referrerId])
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model Referral {
+  id             String         @id @default(cuid())
+  referrerId     String
+  referredUserId String         @unique // a user can be referred at most once
+  referralCode   String
+  status         ReferralStatus @default(REGISTERED)
+
+  createdAt    DateTime  @default(now())
+  registeredAt DateTime?
+  qualifiedAt  DateTime?
+  completedAt  DateTime?
+
+  referrer     User @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUser User @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  // At most one reward per referral. This is the real guarantee behind
+  // "a reward is never created twice" -- see the reward service.
+  reward Reward?
+  events ReferralEvent[]
+
+  @@index([referrerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Reward {
+  id         String       @id @default(cuid())
+  referralId String       @unique // one reward per referral, enforced by the DB
+  userId     String // the referrer who earns it
+  amount     Int // whole rupees, V1 = 500
+  currency   String       @default("INR")
+  status     RewardStatus @default(PENDING)
+  reason     String
+
+  createdAt  DateTime  @default(now())
+  approvedAt DateTime?
+  paidAt     DateTime?
+
+  referral Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model ReferralEvent {
+  id         String            @id @default(cuid())
+  referralId String
+  eventType  ReferralEventType
+  // Small JSON blob of context (amounts, actor, previous status...). Kept
+  // loose on purpose: the audit trail should be able to record anything.
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+
+  referral Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+
+  @@index([referralId])
+  @@index([eventType])
+  @@index([createdAt])
+}
