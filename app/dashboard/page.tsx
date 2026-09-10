@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/current-user";
 import { getUserStats, getUserReferrals } from "@/lib/referrals/stats";
-import { referralUrl, env } from "@/lib/env";
+import { env } from "@/lib/env";
+import { referralUrlFromRequest } from "@/lib/utils/base-url";
 import { AppNav } from "@/components/ui/app-nav";
 import { Card, Stat } from "@/components/ui/card";
 import { ShareLink } from "@/components/dashboard/share-link";
@@ -13,9 +14,10 @@ export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [stats, referrals] = await Promise.all([
+  const [stats, referrals, referralLink] = await Promise.all([
     getUserStats(user.id),
     getUserReferrals(user.id),
+    referralUrlFromRequest(user.referralCode),
   ]);
   const recent = referrals.slice(0, 5);
 
@@ -44,10 +46,7 @@ export default async function DashboardPage() {
 
         <div className="mt-6">
           <Card>
-            <ShareLink
-              url={referralUrl(user.referralCode)}
-              code={user.referralCode}
-            />
+            <ShareLink url={referralLink} code={user.referralCode} />
           </Card>
         </div>
 

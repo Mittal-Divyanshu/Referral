@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { env } from "@/lib/env";
 import { findReferrerByCode, recordClick } from "@/lib/referrals/service";
 import {
   setAttributionCookie,
   newSessionId,
 } from "@/lib/referrals/attribution";
+import { getBaseUrl } from "@/lib/utils/base-url";
 import { log } from "@/lib/utils/logger";
 
 /**
@@ -22,10 +22,12 @@ export async function GET(
 ) {
   const { code } = await params;
 
+  const baseUrl = await getBaseUrl();
+
   const referrer = await findReferrerByCode(code);
   if (!referrer) {
     log.warn("referral_click_unknown_code", { code });
-    return NextResponse.redirect(new URL("/", env.APP_URL));
+    return NextResponse.redirect(new URL("/", baseUrl));
   }
 
   const sessionId = newSessionId();
@@ -47,6 +49,6 @@ export async function GET(
   });
 
   return NextResponse.redirect(
-    new URL(`/register?ref=${referrer.referralCode}`, env.APP_URL),
+    new URL(`/register?ref=${referrer.referralCode}`, baseUrl),
   );
 }
